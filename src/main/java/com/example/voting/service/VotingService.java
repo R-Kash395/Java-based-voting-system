@@ -1,53 +1,71 @@
 package com.example.voting.service;
 
 import com.example.voting.dto.ElectionResult;
+import com.example.voting.entity.Vote;
+import com.example.voting.repository.VoteRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
 
 @Service
 public class VotingService {
 
-    // Thread-safe dictionary tracking Candidates -> Vote Counts
-    private final Map<String, AtomicInteger> candidateRegistry = new ConcurrentHashMap<>();
-    
-    // Thread-safe set tracking unique Voter IDs who already cast a ballot
-    private final Set<String> historicalVoters = ConcurrentHashMap.newKeySet();
+    @Autowired
+    private VoteRepository voteRepository; // This is your bridge to MySQL!
 
-    public VotingService() {
-        // Initialize default ballot choices
-        candidateRegistry.put("Candidate Alpha", new AtomicInteger(0));
-        candidateRegistry.put("Candidate Beta", new AtomicInteger(0));
-    }
+    // Keep the list of valid candidates
+    private final List<String> validCandidates = List.of("Candidate Alpha", "Candidate Beta");
 
     public synchronized String castBallot(String voterId, String candidateName) {
+        // Fetch all votes currently saved in the database
+        List<Vote> allVotes = voteRepository.findAll();
+
         // Step 1: Enforce single-vote protocol validation
-        if (historicalVoters.contains(voterId)) {
+        boolean alreadyVoted = allVotes.stream()
+                                       .anyMatch(v -> v.getVoterId().equals(voterId));
+        
+        if (alreadyVoted) {
             throw new IllegalStateException("Security Alert: User has already cast a vote in this election cycle.");
         }
 
         // Step 2: Ensure target candidate exists
-        if (!candidateRegistry.containsKey(candidateName)) {
+        if (!validCandidates.contains(candidateName)) {
             throw new IllegalArgumentException("Invalid selection: Target candidate not found.");
         }
 
-        // Step 3: Commit transaction atomically
-        historicalVoters.add(voterId);
-        candidateRegistry.get(candidateName).incrementAndGet();
+        // Step 3: Commit transaction to MySQL atomically
+        Vote newVote = new Vote();
+        newVote.setVoterId(voterId);
+        newVote.setCandidateName(candidateName);
+        
+        // This single line generates the SQL INSERT command and saves it forever!
+        voteRepository.save(newVote);
 
         return "Ballot successfully authenticated and counted.";
     }
 
     public ElectionResult getLiveTallies() {
-        Map<String, Integer> simpleTallies = new ConcurrentHashMap<>();
-        int total = 0;
+        // Fetch all votes directly from the MySQL database
+        List<Vote> allVotes = voteRepository.findAll();
+        
+        Map<String, Integer> simpleTallies = new HashMap<>();
+        
+        // Initialize our valid candidates with 0 votes
+        for (String candidate : validCandidates) {
+            simpleTallies.put(candidate, 0);
+        }
 
-        for (Map.Entry<String, AtomicInteger> entry : candidateRegistry.entrySet()) {
-            int votes = entry.getValue().get();
-            simpleTallies.put(entry.getKey(), votes);
-            total += votes;
+        // Count up the votes from the database records
+        int total = 0;
+        for (Vote vote : allVotes) {
+            String candidate = vote.getCandidateName();
+            if (simpleTallies.containsKey(candidate)) {
+                simpleTallies.put(candidate, simpleTallies.get(candidate) + 1);
+                total++;
+            }
         }
 
         return new ElectionResult("General Election", simpleTallies, total);
