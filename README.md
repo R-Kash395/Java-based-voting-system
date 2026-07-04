@@ -1,34 +1,59 @@
-==> Secure Online Voting System REST API
+# Online Voting System
+I built this backend service to handle secure election processes, ensuring that users can cast their ballots safely and that administrators can reliably track the results. 
+The core focus of this project is security and data integrity. It prevents duplicate voting and uses role-based access control so that only authorized users can vote, and only administrators can view the live tally.
 
-This is a thread-safe backend application built using Java and Spring Boot designed to manage secure ballot casting and live election tallying. 
-The core focus of this project is resolving classic distributed system challenges, specifically ensuring strict security clearance, enforcing idempotency to block duplicate votes, 
-and maintaining absolute data consistency under concurrent traffic.
+## What it does
+* **Secure Voting:** Authenticated users can cast a single vote for their chosen candidate.
+* **Duplicate Prevention:** The system checks the database to ensure no user can vote more than once in an election cycle.
+* **Live Tallying:** Administrators can retrieve a real-time, counted tally of all votes directly from the database.
 
-==> Core Architecture and Features
+## The Technology Stack
+I built this project using:
+* Java 21
+* Spring Boot 3 (Web, Data JPA, Security)
+* MySQL 
+* Hibernate (for database ORM)
+* Maven
 
-- Role-Based Security: Implements Spring Security to strictly partition user actions. Regular users are restricted to ballot submission endpoints under the VOTER role,
-  while administrative metrics are shielded behind the ADMIN role.
-- Concurrency Control: To prevent race conditions during high-volume, simultaneous voting windows, the application completely avoids blocking synchronization primitives.
-  Instead, it relies on high-performance concurrent data structures, utilizing ConcurrentHashMap and AtomicInteger to safely manage state across multiple application threads.
-- Idempotency and Deduplication: Includes an in-memory tracking mechanism that cross-references incoming requests against a historic cache of unique voter IDs,
-  ensuring each registered voter can only alter the election state exactly once.
+---
 
-==>Technologies Used
-- Core Language: Java 17
-- Framework Ecosystem: Spring Boot 3.x
-- Security Engine: Spring Security utilizing Basic Authentication
-- Architectural Pattern: Controller-Service-DTO separation for clean decoupling of HTTP routing, business workflows, and data transport layers
+## How to run it locally
 
-==> API Endpoints
+If you want to pull this code down and run it on your own machine, here is how to get it set up.
 
-1 Cast a Ballot
-- URL: /api/vote/cast
-- HTTP Method: POST
-- Authorization: Requires valid credentials mapped to the VOTER role.
-- Expected Request Body: Accepts a JSON payload containing the voterId string and the selected candidateName.
+### 1. Set up your database
+First, you will need to have MySQL installed and running. Open your SQL client and run this command to create the database:
 
-2 View Live Results
-- URL: /api/admin/results
-- HTTP Method: GET
-- Authorization: Requires valid credentials mapped to the ADMIN role.
-- Expected Response: Returns a structured JSON map detailing the current vote totals per candidate along with aggregate election participation metrics.
+### MySQL
+CREATE DATABASE voting_db;
+
+### Configure your credentials
+Navigate to src/main/resources/ and create a file named application.properties. Paste the following text into it, making sure to replace YOUR_PASSWORD with your actual MySQL root password
+
+* spring.application.name=voting
+* spring.datasource.url=jdbc:mysql://localhost:3306/voting_db
+* spring.datasource.username=root
+* spring.datasource.password=YOUR_PASSWORD
+* spring.jpa.hibernate.ddl-auto=update
+* spring.jpa.show-sql=true
+
+### Start the server
+./mvnw spring-boot:run
+
+## How to use the API
+1. Cast a Vote (User Role)
+   Send a POST request to http://localhost:8080/api/vote/cast.
+
+    Authentication: Set up Basic Auth using username voter1 and password password123.
+
+    JSON Body: {
+    "candidateName": "Candidate Alpha"
+    }
+2. View Election Results (Admin Role)
+   send a GET request to http://localhost:8080/api/admin/results.
+
+    Authentication: Set up Basic Auth using username admin and password admin456.
+
+    JSON Body: None required.
+
+The server will return a live JSON summary of candidates and their total vote counts.
